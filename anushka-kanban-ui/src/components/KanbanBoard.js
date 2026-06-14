@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import './KanbanBoard.css';
 
@@ -33,6 +33,12 @@ const TAG_COLORS = {
   'Research':             { bg: 'rgba(251,146,60,0.12)',  color: '#fb923c', border: 'rgba(251,146,60,0.3)'  },
 };
 
+const PILL_COLORS = ['#39d98a','#fb923c','#22d3ee','#a78bfa','#f85149','#a3e635','#facc15'];
+const tagPillColor = (label) => {
+  const hash = label.split('').reduce((a,c)=>a+c.charCodeAt(0),0);
+  return PILL_COLORS[hash % PILL_COLORS.length];
+};
+
 const today = () => {
   const d = new Date();
   return `${String(d.getDate()).padStart(2,'0')} ${d.toLocaleString('default',{month:'short'})}`;
@@ -57,8 +63,16 @@ const SEED = [
 ];
 
 function load() {
-  try { const d = localStorage.getItem('kb-v3'); return d ? JSON.parse(d) : SEED; }
-  catch { return SEED; }
+  try {
+    const d = localStorage.getItem('kb-v3');
+    const data = d ? JSON.parse(d) : SEED;
+    return data.map(t => ({
+      description: '',
+      createdDate: new Date().toISOString(),
+      labels: [],
+      ...t,
+    }));
+  } catch { return SEED; }
 }
 
 const NAV_ITEMS = [
@@ -80,9 +94,20 @@ export default function KanbanBoard() {
   const [filterCol, setFilterCol] = useState(null);
   const [filterType, setFilterType] = useState(null);
   const [form, setForm] = useState({ title:'', priority:'p2', tag:'Enhancement', column:'backlog', sla: today() });
+  const [detailTaskId, setDetailTaskId] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [search, setSearch] = useState('');
+  const [tagInput, setTagInput] = useState('');
 
   useEffect(() => { localStorage.setItem('kb-v3', JSON.stringify(tasks)); }, [tasks]);
 
+  const detailTask = tasks.find(t => t.id === detailTaskId);
+  const matchesSearch = (t) => {
+  if (!search.trim()) return true;
+  const q = search.toLowerCase();
+  return t.title.toLowerCase().includes(q) || (t.labels||[]).some(l=>l.toLowerCase().includes(q));
+};
   const byCol  = col => tasks.filter(t => t.column === col);
   const isOver = sla => {
     if (!sla) return false;
@@ -93,11 +118,11 @@ export default function KanbanBoard() {
   };
 
   const addTask = () => {
-    if (!form.title.trim()) return;
-    setTasks(p => [...p, { id: uuidv4(), ...form }]);
-    setForm({ title:'', priority:'p2', tag:'Enhancement', column:'backlog', sla: today() });
-    setModal(false);
-  };
+  if (!form.title.trim()) return;
+  setTasks(p => [...p, { id: uuidv4(), createdDate: new Date().toISOString(), labels: [], description: '', ...form }]);
+  setForm({ title:'', priority:'p2', tag:'Enhancement', column:'backlog', sla: today() });
+  setModal(false);
+};
 
   const deleteTask = id => setTasks(p => p.filter(t => t.id !== id));
 
@@ -247,6 +272,8 @@ export default function KanbanBoard() {
             </div>
           </div>
           <div className="kb-topbar-pulse"><span className="kb-pulse-dot" /></div>
+          <input className="kb-search" placeholder="Search title or tag…"
+          value={search} onChange={e => setSearch(e.target.value)} />
           <div className="kb-topbar-actions">
             <button className="kb-action-btn" onClick={exportTxt}>↓ TXT</button>
             <button className="kb-action-btn" onClick={exportCsv}>↓ CSV</button>
@@ -281,11 +308,13 @@ export default function KanbanBoard() {
                   {byCol(col.id).map(task => {
                     const tagStyle = TAG_COLORS[task.tag] || TAG_COLORS['Enhancement'];
                     return (
-                      <div key={task.id} className={`kb-card ${task.priority}`}>
+                      <div key={task.id} className={`kb-card ${task.priority} ${search && matchesSearch(task) ? 'kb-highlight' : ''} ${search && !matchesSearch(task) ? 'kb-dim' : ''}`}
+                      onClick={() => { setDetailTaskId(task.id); setEditing(false); setDraft(task); }}>
                         <div className="kb-card-top">
                           <span className="kb-card-title">{task.title}</span>
-                          <button className="kb-card-delete" onClick={() => deleteTask(task.id)}>✕</button>
-                        </div>
+                          <button className="kb-card-delete" onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }}>✕</button>
+                          </div>
+                          
                         <div className="kb-card-tags">
                           <span className={`kb-priority ${task.priority}`}>
                             {PRIORITIES.find(p => p.value === task.priority)?.label}
@@ -296,15 +325,24 @@ export default function KanbanBoard() {
                             border: `1px solid ${tagStyle.border}`,
                           }}>{task.tag}</span>
                         </div>
+
+                        {task.labels?.length > 0 && (
+                          <div className="kb-card-tags" style={{marginTop:'4px'}}>
+                            {task.labels.map(lbl => (
+                              <span key={lbl} className="kb-tag-pill" style={{background: tagPillColor(lbl)}}>{lbl}</span>
+                              ))}
+                              </div>
+                            )}
+
                         {task.sla && (
                           <div className={`kb-sla ${isOver(task.sla) && task.column !== 'done' ? 'overdue' : ''}`}>
                             SLA: {task.sla}
                           </div>
                         )}
                         <div className="kb-card-move">
-                          <button className="kb-move-btn" disabled={col.id==='backlog'} onClick={() => moveTask(task.id,-1)}>← Back</button>
-                          <button className="kb-move-btn" disabled={col.id==='done'}    onClick={() => moveTask(task.id, 1)}>Forward →</button>
-                        </div>
+                          <button className="kb-move-btn" disabled={col.id==='backlog'} onClick={(e) => { e.stopPropagation(); moveTask(task.id,-1); }}>← Back</button>
+                          <button className="kb-move-btn" disabled={col.id==='done'}    onClick={(e) => { e.stopPropagation(); moveTask(task.id, 1); }}>Forward →</button>
+                          </div>
                       </div>
                     );
                   })}
@@ -353,6 +391,88 @@ export default function KanbanBoard() {
             <div className="kb-modal-actions">
               <button className="kb-cancel" onClick={() => setModal(false)}>Cancel</button>
               <button className="kb-submit" onClick={addTask}>Add Task</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {detailTask && (
+        <div className="kb-overlay" onClick={e => e.target===e.currentTarget && setDetailTaskId(null)}>
+          <div className="kb-modal">
+            <h2>{editing ? 'EDIT TASK' : 'TASK DETAIL'}</h2>
+
+            <div className="kb-field">
+              <label>Title</label>
+              {editing
+                ? <input value={draft.title} onChange={e => setDraft(d=>({...d,title:e.target.value}))} />
+                : <div className="kb-detail-value">{detailTask.title}</div>}
+            </div>
+
+            <div className="kb-field">
+              <label>Description</label>
+              {editing
+                ? <textarea value={draft.description} onChange={e => setDraft(d=>({...d,description:e.target.value}))} />
+                : <div className="kb-detail-value">{detailTask.description || '—'}</div>}
+            </div>
+
+            <div className="kb-field">
+              <label>Priority</label>
+              {editing
+                ? <select value={draft.priority} onChange={e => setDraft(d=>({...d,priority:e.target.value}))}>
+                    {PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
+                : <div className="kb-detail-value">{PRIORITIES.find(p=>p.value===detailTask.priority)?.label}</div>}
+            </div>
+
+            <div className="kb-field">
+              <label>Created</label>
+              <div className="kb-detail-value">
+                {new Date(detailTask.createdDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}
+              </div>
+            </div>
+
+            <div className="kb-field">
+              <label>Tags</label>
+              <div className="kb-card-tags">
+                {(editing ? draft.labels : detailTask.labels).map(lbl => (
+                  <span key={lbl} className="kb-tag-pill" style={{background: tagPillColor(lbl)}}>
+                    {lbl}
+                    {editing && (
+                      <button className="kb-tag-remove"
+                        onClick={() => setDraft(d=>({...d, labels: d.labels.filter(l=>l!==lbl)}))}>×</button>
+                    )}
+                  </span>
+                ))}
+              </div>
+              {editing && (
+                <div className="kb-tag-add">
+                  <input placeholder="add tag, press Enter" value={tagInput}
+                    onChange={e => setTagInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key==='Enter' && tagInput.trim()) {
+                        const t = tagInput.trim();
+                        if (!draft.labels.includes(t)) setDraft(d=>({...d, labels:[...d.labels, t]}));
+                        setTagInput('');
+                      }
+                    }} />
+                </div>
+              )}
+            </div>
+
+            <div className="kb-modal-actions">
+              {editing ? (
+                <>
+                  <button className="kb-cancel" onClick={() => setEditing(false)}>Cancel</button>
+                  <button className="kb-submit" onClick={() => {
+                    setTasks(p => p.map(t => t.id===draft.id ? draft : t));
+                    setEditing(false);
+                  }}>Save</button>
+                </>
+              ) : (
+                <>
+                  <button className="kb-cancel" onClick={() => setDetailTaskId(null)}>Close</button>
+                  <button className="kb-submit" onClick={() => { setEditing(true); setDraft(detailTask); }}>Edit</button>
+                </>
+              )}
             </div>
           </div>
         </div>
