@@ -655,8 +655,8 @@
 .kb-tag-add input {
   margin-top: 6px;
   width: 100%;
+}
 
 .kb-search { padding: 6px 10px; border-radius: 6px; background: #1a1a2e; border: 1px solid #2a2a45; color: #e2e8f0; font-size: 12px; width: 220px; flex-shrink: 0; }
 .kb-highlight { outline: 2px solid #39d98a; }
 .kb-dim { opacity: 0.3; }
-} 

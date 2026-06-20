@@ -108,7 +108,27 @@ export default function KanbanBoard() {
   const q = search.toLowerCase();
   return t.title.toLowerCase().includes(q) || (t.labels||[]).some(l=>l.toLowerCase().includes(q));
 };
-  const byCol  = col => tasks.filter(t => t.column === col);
+  const matchesStatusFilter = (t) => {
+    if (!filterCol) return true;
+    if (filterCol === 'overdue') return isOver(t.sla) && t.column !== 'done';
+    if (filterCol === 'pending') return t.column === 'backlog' || t.column === 'assigned';
+    return t.column === filterCol;
+  };
+
+  const matchesTypeFilter = (t) => {
+    if (!filterType) return true;
+    if (filterType === 'Frontend') return t.tag === 'Content & Docs';
+    if (filterType === 'Backend')  return t.tag === 'Development';
+    if (filterType === 'Patch' || filterType === 'Infrastructure') return false;
+    return t.tag === filterType;
+  };
+
+  const visibleTasks = tasks.filter(t =>
+    matchesSearch(t) && matchesStatusFilter(t) && matchesTypeFilter(t)
+  );
+
+  const allByCol = col => tasks.filter(t => t.column === col);
+  const byCol  = col => visibleTasks.filter(t => t.column === col);
   const isOver = sla => {
     if (!sla) return false;
     const [d, m] = sla.split(' ');
@@ -151,11 +171,11 @@ export default function KanbanBoard() {
   };
 
   const total    = tasks.length;
-  const done     = byCol('done').length;
-  const inProg   = byCol('inprogress').length;
+  const done     = allByCol('done').length;
+  const inProg   = allByCol('inprogress').length;
   const pending  = tasks.filter(t => t.column === 'backlog' || t.column === 'assigned').length;
   const critical = tasks.filter(t => t.priority === 'p1').length;
-  const inReview = byCol('inreview').length;
+  const inReview = allByCol('inreview').length;
   const myTasks  = tasks.filter(t => t.title.includes('[Anushka]')).length;
   const overdue  = tasks.filter(t => isOver(t.sla) && t.column !== 'done').length;
 
@@ -308,7 +328,7 @@ export default function KanbanBoard() {
                   {byCol(col.id).map(task => {
                     const tagStyle = TAG_COLORS[task.tag] || TAG_COLORS['Enhancement'];
                     return (
-                      <div key={task.id} className={`kb-card ${task.priority} ${search && matchesSearch(task) ? 'kb-highlight' : ''} ${search && !matchesSearch(task) ? 'kb-dim' : ''}`}
+                      <div key={task.id} className={`kb-card ${task.priority}`}
                       onClick={() => { setDetailTaskId(task.id); setEditing(false); setDraft(task); }}>
                         <div className="kb-card-top">
                           <span className="kb-card-title">{task.title}</span>
