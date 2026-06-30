@@ -1,13 +1,11 @@
 # API Automation Testing
 
-## Assignment
-
 This project demonstrates automated API testing using Python and the Requests library. The script sends requests to multiple API endpoints, validates the expected HTTP status codes automatically, handles network errors gracefully, and prints a summary table showing the endpoint, status code, expected result, and pass/fail outcome.
 
 ## Files Included
 
-- `api_automation_test.py` – Python automation script
-- `screenshot.png` – Screenshot of the script execution
+- `api_test_automation.py` – Python automation script
+- `Screenshot_api.png` – Screenshot of the script execution
 
 ## Output Screenshot
 
