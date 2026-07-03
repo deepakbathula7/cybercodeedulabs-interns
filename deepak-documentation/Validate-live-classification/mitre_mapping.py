@@ -113,7 +113,6 @@ with open(INPUT_FILE, "r", errors="ignore") as file:
         if "Recommendation" in line:
             continue
 
-        # Extract event name
         match = re.search(r"] ([A-Z_]+) \|", line)
 
         if not match:
